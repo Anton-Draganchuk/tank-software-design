@@ -26,9 +26,7 @@ public final class GdxRenderer implements Renderer {
     @Override
     public void drawTank(Position p, Direction d){
         moveRectangleAtTileCenter(ground, tankRect, grid(p));
-        float rotation = switch (d){
-            case UP -> 90f; case RIGHT -> 0f; case DOWN -> -90f; case LEFT -> 180f;
-        };
+        float rotation = d.rotationDeg();   // <- вместо switch
         drawTextureRegionUnscaled(batch, tankTex, tankRect, rotation);
     }
 
@@ -39,7 +37,7 @@ public final class GdxRenderer implements Renderer {
     }
 
     @Override
-    public void flush() { /* тут ничего не нужно */ }
+    public void flush() { /* no-op */ }
 
     private static com.badlogic.gdx.math.GridPoint2 grid(Position p){
         return new com.badlogic.gdx.math.GridPoint2(p.x(), p.y());

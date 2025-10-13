@@ -12,7 +12,7 @@ class TankTest {
         assertThat(t.position()).isEqualTo(new Position(1,1));
         t.turnLeft();                                   // теперь вверх
         t.moveForward(f);
-        assertThat(t.position()).isEqualTo(new Position(1,0));
+        assertThat(t.position()).isEqualTo(new Position(1,2));
         assertThat(t.direction()).isEqualTo(Direction.UP);
     }
 }

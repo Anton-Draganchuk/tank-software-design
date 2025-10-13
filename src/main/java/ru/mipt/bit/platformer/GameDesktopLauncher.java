@@ -1,6 +1,6 @@
 package ru.mipt.bit.platformer;
 
-import com.badlogic.gdx.ApplicationListener;
+import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
@@ -12,6 +12,7 @@ import com.badlogic.gdx.maps.MapRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.maps.tiled.TmxMapLoader;
+import ru.mipt.bit.platformer.input.GdxInputHandler;
 import ru.mipt.bit.platformer.input.InputHandler;
 import ru.mipt.bit.platformer.model.*;
 import ru.mipt.bit.platformer.render.GdxRenderer;
@@ -21,87 +22,91 @@ import static com.badlogic.gdx.graphics.GL20.GL_COLOR_BUFFER_BIT;
 import static ru.mipt.bit.platformer.util.GdxGameUtils.createSingleLayerMapRenderer;
 import static ru.mipt.bit.platformer.util.GdxGameUtils.getSingleLayer;
 
-public class GameDesktopLauncher implements ApplicationListener {
+import java.util.ArrayList;
+import java.util.List;
 
-    private Batch batch;
-    private TiledMap level;
-    private MapRenderer levelRenderer;
-    private TiledMapTileLayer ground;
-
-    // ресурсы
-    private Texture tankTexture;
-    private Texture treeTexture;
-    private TextureRegion tankRegion;
-    private TextureRegion treeRegion;
-
-    // модель
-    private Field field;
-    private Tank tank;
+public final class GameDesktopLauncher extends ApplicationAdapter {
     private Renderer renderer;
     private InputHandler input;
+
+    private SpriteBatch batch;
+    private Texture tankTexture, treeTexture;
+    private TiledMap map;
+    private TiledMapTileLayer ground;
+    private MapRenderer levelRenderer;
+
+    private Field field;
+    private Tank tank;
+    private final List<Entity> world = new ArrayList<>();
 
     @Override
     public void create() {
         batch = new SpriteBatch();
 
         // карта
-        level = new TmxMapLoader().load("level.tmx");
-        levelRenderer = createSingleLayerMapRenderer(level, batch);
-        ground = getSingleLayer(level);
+        map = new TmxMapLoader().load("level.tmx");
+        levelRenderer = createSingleLayerMapRenderer(map, batch);
+        ground = getSingleLayer(map);
+
 
         // текстуры
         tankTexture = new Texture("images/tank_blue.png");
         treeTexture = new Texture("images/greenTree.png");
-        tankRegion = new TextureRegion(tankTexture);
-        treeRegion = new TextureRegion(treeTexture);
 
-        // модель уровня 10x8 (как на слайде)
-        field = new Field(10, 8);
-        tank = new Tank(new Position(1, 1), Direction.RIGHT);
+        renderer = new GdxRenderer(
+                batch,
+                ground,
+                new TextureRegion(tankTexture),
+                new TextureRegion(treeTexture)
+        );
+        input = new GdxInputHandler();
+
+        int w = ground.getWidth();
+        int h = ground.getHeight();
+        field = new Field(w, h);
+
+        tank = new Tank(new Position(1, 1), Direction.UP);
+        Tree t1 = new Tree(new Position(3, 1));
+        Tree t2 = new Tree(new Position(4, 2));
+
         field.add(tank);
-        field.add(new Tree(new Position(1, 3))); // как было в изначальном коде
+        field.add(t1);
+        field.add(t2);
 
-        // рендерер-адаптер
-        renderer = new GdxRenderer(batch, ground, tankRegion, treeRegion);
-
-        // обработчик ввода без копипаста
-        input = new InputHandler(tank, field);
+        world.add(tank);
+        world.add(t1);
+        world.add(t2);
     }
 
     @Override
     public void render() {
-        // фон
-        Gdx.gl.glClearColor(0f, 0f, 0.2f, 1f);
-        Gdx.gl.glClear(GL_COLOR_BUFFER_BIT);
+        // логика
+        Direction d = input.readDirection();
+        if (d != null) new ForwardMovement(d).move(tank, field);
 
-        // вход (стреляем только по событию нажатия)
-        if (Gdx.input.isKeyJustPressed(LEFT) || Gdx.input.isKeyJustPressed(A))  input.onKey(37);
-        if (Gdx.input.isKeyJustPressed(RIGHT) || Gdx.input.isKeyJustPressed(D)) input.onKey(39);
-        if (Gdx.input.isKeyJustPressed(UP) || Gdx.input.isKeyJustPressed(W))    input.onKey(38);
-        if (Gdx.input.isKeyJustPressed(DOWN) || Gdx.input.isKeyJustPressed(S))  input.onKey(40);
-
-        // отрисовка
+        // сначала слой карты
         levelRenderer.render();
-        batch.begin();
-        for (Entity e : field.all()) e.render(renderer);
-        batch.end();
-    }
 
-    @Override public void resize(int width, int height) { }
-    @Override public void pause() { }
-    @Override public void resume() { }
+        // затем наши сущности — ОБЯЗАТЕЛЬНО в begin/end
+        batch.begin();
+        for (Entity e : world) e.render(renderer);
+        batch.end();
+
+        renderer.flush();
+    }
 
     @Override
     public void dispose() {
-        treeTexture.dispose();
-        tankTexture.dispose();
-        level.dispose();
         batch.dispose();
+        tankTexture.dispose();
+        treeTexture.dispose();
+        map.dispose();
     }
 
     public static void main(String[] args) {
-        Lwjgl3ApplicationConfiguration config = new Lwjgl3ApplicationConfiguration();
-        config.setWindowedMode(1280, 1024);
-        new Lwjgl3Application(new GameDesktopLauncher(), config);
+        Lwjgl3ApplicationConfiguration cfg = new Lwjgl3ApplicationConfiguration();
+        cfg.setTitle("Platformer");
+        cfg.setWindowedMode(1280, 1024);
+        new Lwjgl3Application(new GameDesktopLauncher(), cfg);
     }
 }

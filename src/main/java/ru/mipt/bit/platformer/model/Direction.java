@@ -1,18 +1,23 @@
 package ru.mipt.bit.platformer.model;
 
 public enum Direction {
-    UP(0, -1), RIGHT(1, 0), DOWN(0, 1), LEFT(-1, 0);
+    UP(0, 1, 90f),
+    RIGHT(1, 0, 0f),
+    DOWN(0, -1, -90f),
+    LEFT(-1, 0, 180f);
 
-    private final int dx;
-    private final int dy;
+    private final int dx, dy;
+    private final float rotationDeg;
 
-    Direction(int dx, int dy) {
+    Direction(int dx, int dy, float rotationDeg) {
         this.dx = dx;
         this.dy = dy;
+        this.rotationDeg = rotationDeg;
     }
 
     public int dx() { return dx; }
     public int dy() { return dy; }
+    public float rotationDeg() { return rotationDeg; }
 
     public Direction left() {
         switch (this) {
@@ -21,7 +26,7 @@ public enum Direction {
             case DOWN:  return RIGHT;
             case RIGHT: return UP;
         }
-        throw new IllegalStateException("Unexpected value: " + this);
+        throw new IllegalStateException("Unexpected: " + this);
     }
 
     public Direction right() {
@@ -31,16 +36,6 @@ public enum Direction {
             case DOWN:  return LEFT;
             case LEFT:  return UP;
         }
-        throw new IllegalStateException("Unexpected value: " + this);
-    }
-
-    public float rotationDeg() {
-        switch (this) {
-            case UP:    return 90f;
-            case RIGHT: return 0f;
-            case DOWN:  return 270f;
-            case LEFT:  return 180f;
-            default:    throw new IllegalStateException("Unexpected value: " + this);
-        }
+        throw new IllegalStateException("Unexpected: " + this);
     }
 }
