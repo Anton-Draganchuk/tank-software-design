@@ -33,4 +33,14 @@ public enum Direction {
         }
         throw new IllegalStateException("Unexpected value: " + this);
     }
+
+    public float rotationDeg() {
+        switch (this) {
+            case UP:    return 90f;
+            case RIGHT: return 0f;
+            case DOWN:  return 270f;
+            case LEFT:  return 180f;
+            default:    throw new IllegalStateException("Unexpected value: " + this);
+        }
+    }
 }
