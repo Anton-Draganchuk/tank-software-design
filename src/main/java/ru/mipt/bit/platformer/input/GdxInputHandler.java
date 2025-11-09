@@ -13,4 +13,9 @@ public final class GdxInputHandler implements InputHandler {
         if (Gdx.input.isKeyJustPressed(Input.Keys.D) || Gdx.input.isKeyJustPressed(Input.Keys.RIGHT)) return Direction.RIGHT;
         return null;
     }
+
+    @Override
+    public boolean isHealthToggleRequested() {
+        return Gdx.input.isKeyJustPressed(Input.Keys.L);
+    }
 }

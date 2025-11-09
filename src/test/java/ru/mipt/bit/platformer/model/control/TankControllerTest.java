@@ -14,11 +14,14 @@ class TankControllerTest {
     @Test
     void playerControllerExecutesInputCommand() {
         Field field = new Field(3, 3);
-        Tank tank = new Tank(new Position(1, 1), Direction.UP);
+        Tank tank = new Tank(new Position(1, 1), Direction.UP, 100);
         field.add(tank);
 
         MovementManager manager = new MovementManager(field);
-        InputHandler handler = () -> Direction.RIGHT;
+        InputHandler handler = new InputHandler() {
+            @Override public Direction readDirection() { return Direction.RIGHT; }
+            @Override public boolean isHealthToggleRequested() { return false; }
+        };
         PlayerTankController controller = new PlayerTankController(tank, handler);
 
         Command command = controller.nextCommand(manager, 0.016f);
@@ -30,11 +33,14 @@ class TankControllerTest {
     @Test
     void playerControllerSkipsWhenNoInput() {
         Field field = new Field(3, 3);
-        Tank tank = new Tank(new Position(1, 1), Direction.UP);
+        Tank tank = new Tank(new Position(1, 1), Direction.UP, 100);
         field.add(tank);
 
         MovementManager manager = new MovementManager(field);
-        InputHandler handler = () -> null;
+        InputHandler handler = new InputHandler() {
+            @Override public Direction readDirection() { return null; }
+            @Override public boolean isHealthToggleRequested() { return false; }
+        };
         PlayerTankController controller = new PlayerTankController(tank, handler);
 
         assertThat(controller.nextCommand(manager, 0.016f)).isNull();
@@ -44,7 +50,7 @@ class TankControllerTest {
     @Test
     void randomControllerUsesRandomDirection() {
         Field field = new Field(3, 3);
-        Tank tank = new Tank(new Position(1, 1), Direction.UP);
+        Tank tank = new Tank(new Position(1, 1), Direction.UP, 100);
         field.add(tank);
 
         MovementManager manager = new MovementManager(field);

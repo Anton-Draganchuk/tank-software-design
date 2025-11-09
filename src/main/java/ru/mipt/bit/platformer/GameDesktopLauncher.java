@@ -1,9 +1,9 @@
 package ru.mipt.bit.platformer;
 
 import com.badlogic.gdx.ApplicationAdapter;
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
-import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
@@ -16,13 +16,16 @@ import ru.mipt.bit.platformer.input.GdxInputHandler;
 import ru.mipt.bit.platformer.input.InputHandler;
 import ru.mipt.bit.platformer.model.*;
 import ru.mipt.bit.platformer.model.command.Command;
+import ru.mipt.bit.platformer.model.command.ToggleHealthDisplayCommand;
 import ru.mipt.bit.platformer.model.control.PlayerTankController;
 import ru.mipt.bit.platformer.model.control.RandomTankController;
 import ru.mipt.bit.platformer.model.control.TankController;
 import ru.mipt.bit.platformer.model.level.LevelLoader;
 import ru.mipt.bit.platformer.model.level.RandomLevelLoader;
 import ru.mipt.bit.platformer.model.level.TextLevelLoader;
+import ru.mipt.bit.platformer.render.GdxHealthBarDrawer;
 import ru.mipt.bit.platformer.render.GdxRenderer;
+import ru.mipt.bit.platformer.render.HealthOverlayRenderer;
 
 import static ru.mipt.bit.platformer.util.GdxGameUtils.createSingleLayerMapRenderer;
 import static ru.mipt.bit.platformer.util.GdxGameUtils.getSingleLayer;
@@ -45,7 +48,13 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
     private final List<Entity> world = new ArrayList<>();
     private final List<TankController> controllers = new ArrayList<>();
     private Random aiRandom;
+    private Random healthRandom;
     private float aiMoveInterval;
+    private int minHealth = 80;
+    private int maxHealth = 100;
+    private HealthOverlayRenderer healthOverlayRenderer;
+    private GdxHealthBarDrawer healthBarDrawer;
+    private ToggleHealthDisplayCommand toggleHealthCommand;
 
     @Override
     public void create() {
@@ -60,12 +69,16 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
         tankTexture = new Texture("images/tank_blue.png");
         treeTexture = new Texture("images/greenTree.png");
 
-        renderer = new GdxRenderer(
+        Renderer baseRenderer = new GdxRenderer(
                 batch,
                 ground,
                 new TextureRegion(tankTexture),
                 new TextureRegion(treeTexture)
         );
+        healthBarDrawer = new GdxHealthBarDrawer(batch, ground);
+        healthOverlayRenderer = new HealthOverlayRenderer(baseRenderer, healthBarDrawer);
+        renderer = healthOverlayRenderer;
+        toggleHealthCommand = new ToggleHealthDisplayCommand(healthOverlayRenderer);
         input = new GdxInputHandler();
 
 
@@ -85,7 +98,9 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
         world.clear();
         controllers.clear();
 
-        Tank playerTank = new Tank(data.playerStart, Direction.UP);
+        configureHealthRandom();
+
+        Tank playerTank = createTank(data.playerStart, Direction.UP);
         addTank(playerTank, new PlayerTankController(playerTank, input));
 
         List<Tree> treeEntities = new ArrayList<>();
@@ -112,6 +127,7 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
             Command command = controller.nextCommand(movement, delta);
             if (command != null) command.execute();
         }
+        if (input.isHealthToggleRequested()) toggleHealthCommand.execute();
 
 
         levelRenderer.render();
@@ -130,6 +146,9 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
         tankTexture.dispose();
         treeTexture.dispose();
         map.dispose();
+        if (healthOverlayRenderer != null) {
+            healthOverlayRenderer.dispose();
+        }
     }
 
     private void addTank(Tank tank, TankController controller) {
@@ -147,7 +166,8 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
             attempts++;
             Position candidate = new Position(aiRandom.nextInt(width), aiRandom.nextInt(height));
             if (!field.isFree(candidate)) continue;
-            Tank aiTank = new Tank(candidate, randomDirection());
+            Direction dir = randomDirection();
+            Tank aiTank = createTank(candidate, dir);
             addTank(aiTank, new RandomTankController(aiTank, aiRandom, aiMoveInterval));
             spawned++;
         }
@@ -156,6 +176,22 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
     private Direction randomDirection() {
         Direction[] dirs = Direction.values();
         return dirs[aiRandom.nextInt(dirs.length)];
+    }
+
+    private void configureHealthRandom() {
+        minHealth = Math.max(1, Integer.getInteger("level.health.min", 80));
+        maxHealth = Math.max(minHealth, Integer.getInteger("level.health.max", 100));
+        long healthSeed = Long.getLong("level.health.seed", System.currentTimeMillis());
+        healthRandom = new Random(healthSeed);
+    }
+
+    private Tank createTank(Position position, Direction direction) {
+        return new Tank(position, direction, randomHealth());
+    }
+
+    private int randomHealth() {
+        int range = Math.max(1, maxHealth - minHealth + 1);
+        return minHealth + healthRandom.nextInt(range);
     }
 
     private static float parseFloatProperty(String key, float defaultValue) {

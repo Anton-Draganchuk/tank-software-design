@@ -8,8 +8,8 @@ class MovementManagerTest {
     @Test
     void locksStartAndDestinationWithinFrame() {
         Field field = new Field(5, 5);
-        Tank moving = new Tank(new Position(1, 1), Direction.UP);
-        Tank neighbor = new Tank(new Position(1, 0), Direction.UP);
+        Tank moving = new Tank(new Position(1, 1), Direction.UP, 100);
+        Tank neighbor = new Tank(new Position(1, 0), Direction.UP, 100);
         field.add(moving);
         field.add(neighbor);
 
@@ -29,7 +29,7 @@ class MovementManagerTest {
     @Test
     void preventsMovingOutOfBounds() {
         Field field = new Field(2, 2);
-        Tank tank = new Tank(new Position(0, 0), Direction.LEFT);
+        Tank tank = new Tank(new Position(0, 0), Direction.LEFT, 100);
         field.add(tank);
 
         MovementManager manager = new MovementManager(field);
@@ -40,7 +40,7 @@ class MovementManagerTest {
     @Test
     void stopsBeforeBlockingTrees() {
         Field field = new Field(3, 3);
-        Tank tank = new Tank(new Position(0, 0), Direction.RIGHT);
+        Tank tank = new Tank(new Position(0, 0), Direction.RIGHT, 100);
         field.add(tank);
         field.add(new Tree(new Position(1, 0)));
 
