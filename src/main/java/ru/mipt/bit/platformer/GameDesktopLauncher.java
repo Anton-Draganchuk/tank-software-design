@@ -1,24 +1,24 @@
 package ru.mipt.bit.platformer;
 
 import com.badlogic.gdx.ApplicationAdapter;
-import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.maps.MapRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.maps.tiled.TmxMapLoader;
+
 import ru.mipt.bit.platformer.input.GdxInputHandler;
 import ru.mipt.bit.platformer.input.InputHandler;
 import ru.mipt.bit.platformer.model.*;
+import ru.mipt.bit.platformer.model.level.LevelLoader;
+import ru.mipt.bit.platformer.model.level.RandomLevelLoader;
+import ru.mipt.bit.platformer.model.level.TextLevelLoader;
 import ru.mipt.bit.platformer.render.GdxRenderer;
 
-import static com.badlogic.gdx.Input.Keys.*;
-import static com.badlogic.gdx.graphics.GL20.GL_COLOR_BUFFER_BIT;
 import static ru.mipt.bit.platformer.util.GdxGameUtils.createSingleLayerMapRenderer;
 import static ru.mipt.bit.platformer.util.GdxGameUtils.getSingleLayer;
 
@@ -43,11 +43,10 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
     public void create() {
         batch = new SpriteBatch();
 
-        // карта
+        // карта (TMX)
         map = new TmxMapLoader().load("level.tmx");
         levelRenderer = createSingleLayerMapRenderer(map, batch);
         ground = getSingleLayer(map);
-
 
         // текстуры
         tankTexture = new Texture("images/tank_blue.png");
@@ -61,33 +60,43 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
         );
         input = new GdxInputHandler();
 
+        // ------- ДЗ4: выбираем стратегию загрузки уровня -------
         int w = ground.getWidth();
         int h = ground.getHeight();
-        field = new Field(w, h);
 
-        tank = new Tank(new Position(1, 1), Direction.UP);
-        Tree t1 = new Tree(new Position(3, 1));
-        Tree t2 = new Tree(new Position(4, 2));
+        // по умолчанию читаем из файла; можно переопределить -Dlevel.mode=random
+        String mode = System.getProperty("level.mode", "file");
+        LevelLoader loader = "random".equalsIgnoreCase(mode)
+                ? new RandomLevelLoader(w, h, Math.max((w * h) / 10, 6), System.currentTimeMillis())
+                : new TextLevelLoader("levels/level1.txt");   // файл в resources
 
+        LevelLoader.LevelData data = loader.load();
+        // -------------------------------------------------------
+
+        // модель по данным загрузчика
+        field = new Field(data.width, data.height);
+        tank  = new Tank(data.playerStart, Direction.UP);
         field.add(tank);
-        field.add(t1);
-        field.add(t2);
 
+        world.clear();
         world.add(tank);
-        world.add(t1);
-        world.add(t2);
+        for (Position p : data.trees) {
+            Tree t = new Tree(p);
+            field.add(t);
+            world.add(t);
+        }
     }
 
     @Override
     public void render() {
-        // логика
+        // логика ввода → движение
         Direction d = input.readDirection();
         if (d != null) new ForwardMovement(d).move(tank, field);
 
         // сначала слой карты
         levelRenderer.render();
 
-        // затем наши сущности — ОБЯЗАТЕЛЬНО в begin/end
+        // затем сущности
         batch.begin();
         for (Entity e : world) e.render(renderer);
         batch.end();
