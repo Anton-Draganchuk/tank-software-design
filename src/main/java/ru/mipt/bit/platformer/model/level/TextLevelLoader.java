@@ -8,7 +8,6 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Читает карту из resources по относительному пути, например "levels/level1.txt". */
 public final class TextLevelLoader implements LevelLoader {
     private final String resourcePath;
 

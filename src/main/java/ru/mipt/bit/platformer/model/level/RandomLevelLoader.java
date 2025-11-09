@@ -15,13 +15,11 @@ public final class RandomLevelLoader implements LevelLoader {
     @Override
     public LevelData load() {
         Set<Position> used = new HashSet<>();
-        // случайная стартовая позиция игрока
         Position start = null;
         while (start == null) {
             Position p = new Position(rnd.nextInt(width), rnd.nextInt(height));
             if (used.add(p)) start = p;
         }
-        // деревья в уникальных клетках, не занимая игрока
         List<Position> trees = new ArrayList<>();
         while (trees.size() < treeCount) {
             Position p = new Position(rnd.nextInt(width), rnd.nextInt(height));

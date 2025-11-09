@@ -26,7 +26,7 @@ public final class GdxRenderer implements Renderer {
     @Override
     public void drawTank(Position p, Direction d){
         moveRectangleAtTileCenter(ground, tankRect, grid(p));
-        float rotation = d.rotationDeg();   // <- вместо switch
+        float rotation = d.rotationDeg();
         drawTextureRegionUnscaled(batch, tankTex, tankRect, rotation);
     }
 
