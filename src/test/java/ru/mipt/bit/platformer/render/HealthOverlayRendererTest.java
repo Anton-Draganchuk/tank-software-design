@@ -36,6 +36,10 @@ class HealthOverlayRendererTest {
         }
 
         @Override
+        public void drawBullet(Position position, Direction direction) {
+        }
+
+        @Override
         public void flush() {
         }
     }

@@ -4,5 +4,6 @@ import ru.mipt.bit.platformer.model.Direction;
 
 public interface InputHandler {
     Direction readDirection();
+    boolean isShootingRequested();
     boolean isHealthToggleRequested();
 }

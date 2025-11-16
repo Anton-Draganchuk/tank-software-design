@@ -38,9 +38,10 @@ public final class GdxHealthBarDrawer implements HealthBarDrawer {
         moveRectangleAtTileCenter(ground, tileRect, grid(tank.position()));
         float width = tileWidth * 0.7f;
         float height = tileHeight * 0.08f;
-        float x = tileRect.x + tileRect.width / 2f;
-        float centerY = tileRect.y + tileRect.height * 3/4f;
-        float y = centerY + height;
+        float centerY = tileRect.y + tileRect.height / 2f;
+        float centerX = tileRect.x + tileRect.width / 2f;
+        float x = centerX - width / 2f;
+        float y = centerY - height / 2f;
         drawBackground(x, y, width, height);
         drawForeground(x, y, width, height, tank.health(), tank.maxHealth());
     }

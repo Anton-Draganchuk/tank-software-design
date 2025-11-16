@@ -15,6 +15,11 @@ public final class GdxInputHandler implements InputHandler {
     }
 
     @Override
+    public boolean isShootingRequested() {
+        return Gdx.input.isKeyJustPressed(Input.Keys.SPACE);
+    }
+
+    @Override
     public boolean isHealthToggleRequested() {
         return Gdx.input.isKeyJustPressed(Input.Keys.L);
     }

@@ -4,6 +4,7 @@ import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
@@ -31,15 +32,20 @@ import static ru.mipt.bit.platformer.util.GdxGameUtils.createSingleLayerMapRende
 import static ru.mipt.bit.platformer.util.GdxGameUtils.getSingleLayer;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 public final class GameDesktopLauncher extends ApplicationAdapter {
     private Renderer renderer;
     private InputHandler input;
 
     private SpriteBatch batch;
-    private Texture tankTexture, treeTexture;
+    private Texture tankTexture, treeTexture, bulletTexture;
+    private TextureRegion bulletRegion;
     private TiledMap map;
     private TiledMapTileLayer ground;
     private MapRenderer levelRenderer;
@@ -47,14 +53,21 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
     private Field field;
     private final List<Entity> world = new ArrayList<>();
     private final List<TankController> controllers = new ArrayList<>();
+    private final Map<Tank, TankController> controllerByTank = new HashMap<>();
+    private final Set<TankController> controllersToRemove = new HashSet<>();
     private Random aiRandom;
     private Random healthRandom;
     private float aiMoveInterval;
+    private float aiShootProbability = 0.4f;
     private int minHealth = 80;
     private int maxHealth = 100;
+    private int bulletDamage = 20;
+    private float bulletSpeed = 10f;
+    private float bulletReload = 0.5f;
     private HealthOverlayRenderer healthOverlayRenderer;
     private GdxHealthBarDrawer healthBarDrawer;
     private ToggleHealthDisplayCommand toggleHealthCommand;
+    private WeaponManager weaponManager;
 
     @Override
     public void create() {
@@ -68,12 +81,15 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
 
         tankTexture = new Texture("images/tank_blue.png");
         treeTexture = new Texture("images/greenTree.png");
+        bulletTexture = createBulletTexture();
+        bulletRegion = new TextureRegion(bulletTexture);
 
         Renderer baseRenderer = new GdxRenderer(
                 batch,
                 ground,
                 new TextureRegion(tankTexture),
-                new TextureRegion(treeTexture)
+                new TextureRegion(treeTexture),
+                bulletRegion
         );
         healthBarDrawer = new GdxHealthBarDrawer(batch, ground);
         healthOverlayRenderer = new HealthOverlayRenderer(baseRenderer, healthBarDrawer);
@@ -97,44 +113,71 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
         field = new Field(data.width, data.height);
         world.clear();
         controllers.clear();
+        controllerByTank.clear();
+        controllersToRemove.clear();
+        field.addObserver(new FieldObserver() {
+            @Override
+            public void entityAdded(Entity entity) {
+                world.add(entity);
+            }
+
+            @Override
+            public void entityRemoved(Entity entity) {
+                world.remove(entity);
+                if (entity instanceof Tank tank) {
+                    scheduleControllerRemoval(tank);
+                }
+            }
+        });
 
         configureHealthRandom();
+        configureWeapons();
+
+        weaponManager = new WeaponManager(field, bulletDamage, bulletSpeed, bulletReload);
 
         Tank playerTank = createTank(data.playerStart, Direction.UP);
-        addTank(playerTank, new PlayerTankController(playerTank, input));
+        addTank(playerTank, new PlayerTankController(playerTank, input, weaponManager));
 
-        List<Tree> treeEntities = new ArrayList<>();
         for (Position p : data.trees) {
-            Tree t = new Tree(p);
-            field.add(t);
-            treeEntities.add(t);
+            field.add(new Tree(p));
         }
 
         int aiCount = Math.max(0, Integer.getInteger("level.ai.count", 3));
         long aiSeed = Long.getLong("level.ai.seed", System.currentTimeMillis());
         aiMoveInterval = parseFloatProperty("level.ai.interval", 1.0f);
+        aiShootProbability = clamp01(parseFloatProperty("level.ai.shootProbability", aiShootProbability));
         aiRandom = new Random(aiSeed);
         spawnAiTanks(aiCount, data.width, data.height);
-
-        world.addAll(treeEntities);
     }
 
     @Override
     public void render() {
         float delta = Gdx.graphics.getDeltaTime();
+        weaponManager.update(delta);
         MovementManager movement = new MovementManager(field);
-        for (TankController controller : controllers) {
+        List<TankController> activeControllers = List.copyOf(controllers);
+        for (TankController controller : activeControllers) {
+            if (controllersToRemove.contains(controller)) {
+                continue;
+            }
             Command command = controller.nextCommand(movement, delta);
-            if (command != null) command.execute();
+            if (command != null) {
+                command.execute();
+            }
         }
-        if (input.isHealthToggleRequested()) toggleHealthCommand.execute();
+        if (input.isHealthToggleRequested()) {
+            toggleHealthCommand.execute();
+        }
 
+        tickWorld(delta);
+        cleanupControllers();
 
         levelRenderer.render();
 
-
         batch.begin();
-        for (Entity e : world) e.render(renderer);
+        for (Entity e : world) {
+            e.render(renderer);
+        }
         batch.end();
 
         renderer.flush();
@@ -145,6 +188,9 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
         batch.dispose();
         tankTexture.dispose();
         treeTexture.dispose();
+        if (bulletTexture != null) {
+            bulletTexture.dispose();
+        }
         map.dispose();
         if (healthOverlayRenderer != null) {
             healthOverlayRenderer.dispose();
@@ -152,9 +198,10 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
     }
 
     private void addTank(Tank tank, TankController controller) {
-        field.add(tank);
-        world.add(tank);
         controllers.add(controller);
+        controllerByTank.put(tank, controller);
+        weaponManager.registerTank(tank);
+        field.add(tank);
     }
 
     private void spawnAiTanks(int count, int width, int height) {
@@ -168,8 +215,32 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
             if (!field.isFree(candidate)) continue;
             Direction dir = randomDirection();
             Tank aiTank = createTank(candidate, dir);
-            addTank(aiTank, new RandomTankController(aiTank, aiRandom, aiMoveInterval));
+            addTank(aiTank, new RandomTankController(aiTank, aiRandom, aiMoveInterval, weaponManager, aiShootProbability));
             spawned++;
+        }
+    }
+
+    private void tickWorld(float deltaTime) {
+        for (Entity entity : field.all()) {
+            if (entity instanceof LivingEntity livingEntity) {
+                livingEntity.live(deltaTime);
+            }
+        }
+    }
+
+    private void cleanupControllers() {
+        if (controllersToRemove.isEmpty()) {
+            return;
+        }
+        controllers.removeAll(controllersToRemove);
+        controllersToRemove.clear();
+    }
+
+    private void scheduleControllerRemoval(Tank tank) {
+        TankController controller = controllerByTank.remove(tank);
+        if (controller != null) {
+            controllersToRemove.add(controller);
+            weaponManager.unregisterTank(tank);
         }
     }
 
@@ -185,6 +256,12 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
         healthRandom = new Random(healthSeed);
     }
 
+    private void configureWeapons() {
+        bulletDamage = Math.max(1, Integer.getInteger("weapon.bullet.damage", bulletDamage));
+        bulletSpeed = Math.max(0.1f, parseFloatProperty("weapon.bullet.speed", bulletSpeed));
+        bulletReload = Math.max(0.1f, parseFloatProperty("weapon.bullet.reload", bulletReload));
+    }
+
     private Tank createTank(Position position, Direction direction) {
         return new Tank(position, direction, randomHealth());
     }
@@ -192,6 +269,20 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
     private int randomHealth() {
         int range = Math.max(1, maxHealth - minHealth + 1);
         return minHealth + healthRandom.nextInt(range);
+    }
+
+    private Texture createBulletTexture() {
+        Pixmap pixmap = new Pixmap(24, 24, Pixmap.Format.RGBA8888);
+        pixmap.setColor(0f, 0f, 0f, 0f);
+        pixmap.fill();
+        pixmap.setColor(1f, 0.8f, 0.1f, 1f);
+        int radius = Math.max(4, pixmap.getWidth() / 3);
+        pixmap.fillCircle(pixmap.getWidth() / 2, pixmap.getHeight() / 2, radius);
+        pixmap.setColor(1f, 0.4f, 0.05f, 1f);
+        pixmap.drawCircle(pixmap.getWidth() / 2, pixmap.getHeight() / 2, radius);
+        Texture texture = new Texture(pixmap);
+        pixmap.dispose();
+        return texture;
     }
 
     private static float parseFloatProperty(String key, float defaultValue) {
@@ -202,6 +293,13 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
         } catch (NumberFormatException e) {
             return defaultValue;
         }
+    }
+
+    private static float clamp01(float value) {
+        if (Float.isNaN(value)) {
+            return 0f;
+        }
+        return Math.max(0f, Math.min(1f, value));
     }
 
     public static void main(String[] args) {

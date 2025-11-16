@@ -16,13 +16,15 @@ class TankControllerTest {
         Field field = new Field(3, 3);
         Tank tank = new Tank(new Position(1, 1), Direction.UP, 100);
         field.add(tank);
+        WeaponManager weaponManager = new WeaponManager(field, 10, 5f, 0.1f);
 
         MovementManager manager = new MovementManager(field);
         InputHandler handler = new InputHandler() {
             @Override public Direction readDirection() { return Direction.RIGHT; }
+            @Override public boolean isShootingRequested() { return false; }
             @Override public boolean isHealthToggleRequested() { return false; }
         };
-        PlayerTankController controller = new PlayerTankController(tank, handler);
+        PlayerTankController controller = new PlayerTankController(tank, handler, weaponManager);
 
         Command command = controller.nextCommand(manager, 0.016f);
         assertThat(command).isNotNull();
@@ -35,13 +37,15 @@ class TankControllerTest {
         Field field = new Field(3, 3);
         Tank tank = new Tank(new Position(1, 1), Direction.UP, 100);
         field.add(tank);
+        WeaponManager weaponManager = new WeaponManager(field, 10, 5f, 0.1f);
 
         MovementManager manager = new MovementManager(field);
         InputHandler handler = new InputHandler() {
             @Override public Direction readDirection() { return null; }
+            @Override public boolean isShootingRequested() { return false; }
             @Override public boolean isHealthToggleRequested() { return false; }
         };
-        PlayerTankController controller = new PlayerTankController(tank, handler);
+        PlayerTankController controller = new PlayerTankController(tank, handler, weaponManager);
 
         assertThat(controller.nextCommand(manager, 0.016f)).isNull();
         assertThat(tank.position()).isEqualTo(new Position(1, 1));
@@ -52,9 +56,10 @@ class TankControllerTest {
         Field field = new Field(3, 3);
         Tank tank = new Tank(new Position(1, 1), Direction.UP, 100);
         field.add(tank);
+        WeaponManager weaponManager = new WeaponManager(field, 10, 5f, 0.1f);
 
         MovementManager manager = new MovementManager(field);
-        RandomTankController controller = new RandomTankController(tank, new StubRandom(1), 0.5f);
+        RandomTankController controller = new RandomTankController(tank, new StubRandom(1), 0.5f, weaponManager, 0f);
 
         assertThat(controller.nextCommand(manager, 0.1f)).isNull();
 

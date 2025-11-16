@@ -28,6 +28,7 @@ class ToggleHealthDisplayCommandTest {
     private static final class NoOpRenderer implements Renderer {
         @Override public void drawTank(Tank tank) {}
         @Override public void drawTree(Position p) {}
+        @Override public void drawBullet(Position position, Direction direction) {}
         @Override public void flush() {}
     }
 

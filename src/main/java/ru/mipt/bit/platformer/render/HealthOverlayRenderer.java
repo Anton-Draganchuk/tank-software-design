@@ -1,5 +1,6 @@
 package ru.mipt.bit.platformer.render;
 
+import ru.mipt.bit.platformer.model.Direction;
 import ru.mipt.bit.platformer.model.Position;
 import ru.mipt.bit.platformer.model.Renderer;
 import ru.mipt.bit.platformer.model.Tank;
@@ -23,6 +24,11 @@ public final class HealthOverlayRenderer implements Renderer {
     @Override
     public void drawTree(Position p) {
         delegate.drawTree(p);
+    }
+
+    @Override
+    public void drawBullet(Position position, Direction direction) {
+        delegate.drawBullet(position, direction);
     }
 
     @Override
