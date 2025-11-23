@@ -13,7 +13,12 @@ import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.maps.tiled.TmxMapLoader;
 
-import ru.mipt.bit.platformer.input.GdxInputHandler;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+
+import ru.mipt.bit.platformer.config.AiProperties;
+import ru.mipt.bit.platformer.config.GameConfiguration;
+import ru.mipt.bit.platformer.config.HealthProperties;
+import ru.mipt.bit.platformer.config.LevelDimensions;
 import ru.mipt.bit.platformer.input.InputHandler;
 import ru.mipt.bit.platformer.model.*;
 import ru.mipt.bit.platformer.model.command.Command;
@@ -22,10 +27,6 @@ import ru.mipt.bit.platformer.model.control.PlayerTankController;
 import ru.mipt.bit.platformer.model.control.RandomTankController;
 import ru.mipt.bit.platformer.model.control.TankController;
 import ru.mipt.bit.platformer.model.level.LevelLoader;
-import ru.mipt.bit.platformer.model.level.RandomLevelLoader;
-import ru.mipt.bit.platformer.model.level.TextLevelLoader;
-import ru.mipt.bit.platformer.render.GdxHealthBarDrawer;
-import ru.mipt.bit.platformer.render.GdxRenderer;
 import ru.mipt.bit.platformer.render.HealthOverlayRenderer;
 
 import static ru.mipt.bit.platformer.util.GdxGameUtils.createSingleLayerMapRenderer;
@@ -42,6 +43,7 @@ import java.util.Set;
 public final class GameDesktopLauncher extends ApplicationAdapter {
     private Renderer renderer;
     private InputHandler input;
+    private AnnotationConfigApplicationContext context;
 
     private SpriteBatch batch;
     private Texture tankTexture, treeTexture, bulletTexture;
@@ -61,11 +63,7 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
     private float aiShootProbability = 0.4f;
     private int minHealth = 80;
     private int maxHealth = 100;
-    private int bulletDamage = 20;
-    private float bulletSpeed = 10f;
-    private float bulletReload = 0.5f;
     private HealthOverlayRenderer healthOverlayRenderer;
-    private GdxHealthBarDrawer healthBarDrawer;
     private ToggleHealthDisplayCommand toggleHealthCommand;
     private WeaponManager weaponManager;
 
@@ -73,40 +71,23 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
     public void create() {
         batch = new SpriteBatch();
 
-
         map = new TmxMapLoader().load("level.tmx");
         levelRenderer = createSingleLayerMapRenderer(map, batch);
         ground = getSingleLayer(map);
-
 
         tankTexture = new Texture("images/tank_blue.png");
         treeTexture = new Texture("images/greenTree.png");
         bulletTexture = createBulletTexture();
         bulletRegion = new TextureRegion(bulletTexture);
 
-        Renderer baseRenderer = new GdxRenderer(
-                batch,
-                ground,
-                new TextureRegion(tankTexture),
-                new TextureRegion(treeTexture),
-                bulletRegion
-        );
-        healthBarDrawer = new GdxHealthBarDrawer(batch, ground);
-        healthOverlayRenderer = new HealthOverlayRenderer(baseRenderer, healthBarDrawer);
+        initializeApplicationContext();
+
+        healthOverlayRenderer = context.getBean(HealthOverlayRenderer.class);
         renderer = healthOverlayRenderer;
-        toggleHealthCommand = new ToggleHealthDisplayCommand(healthOverlayRenderer);
-        input = new GdxInputHandler();
+        toggleHealthCommand = context.getBean(ToggleHealthDisplayCommand.class);
+        input = context.getBean(InputHandler.class);
 
-
-        int w = ground.getWidth();
-        int h = ground.getHeight();
-
-        // по умолчанию читаем из файла; можно переопределить -Dlevel.mode=random
-        String mode = System.getProperty("level.mode", "file");
-        LevelLoader loader = "random".equalsIgnoreCase(mode)
-                ? new RandomLevelLoader(w, h, Math.max((w * h) / 10, 6), System.currentTimeMillis())
-                : new TextLevelLoader("levels/level1.txt");
-
+        LevelLoader loader = context.getBean(LevelLoader.class);
         LevelLoader.LevelData data = loader.load();
 
 
@@ -131,9 +112,10 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
         });
 
         configureHealthRandom();
-        configureWeapons();
+        configureAiSettings();
 
-        weaponManager = new WeaponManager(field, bulletDamage, bulletSpeed, bulletReload);
+        context.getBeanFactory().registerSingleton("field", field);
+        weaponManager = context.getBean(WeaponManager.class);
 
         Tank playerTank = createTank(data.playerStart, Direction.UP);
         addTank(playerTank, new PlayerTankController(playerTank, input, weaponManager));
@@ -143,10 +125,6 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
         }
 
         int aiCount = Math.max(0, Integer.getInteger("level.ai.count", 3));
-        long aiSeed = Long.getLong("level.ai.seed", System.currentTimeMillis());
-        aiMoveInterval = parseFloatProperty("level.ai.interval", 1.0f);
-        aiShootProbability = clamp01(parseFloatProperty("level.ai.shootProbability", aiShootProbability));
-        aiRandom = new Random(aiSeed);
         spawnAiTanks(aiCount, data.width, data.height);
     }
 
@@ -185,6 +163,9 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
 
     @Override
     public void dispose() {
+        if (context != null) {
+            context.close();
+        }
         batch.dispose();
         tankTexture.dispose();
         treeTexture.dispose();
@@ -250,16 +231,30 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
     }
 
     private void configureHealthRandom() {
-        minHealth = Math.max(1, Integer.getInteger("level.health.min", 80));
-        maxHealth = Math.max(minHealth, Integer.getInteger("level.health.max", 100));
-        long healthSeed = Long.getLong("level.health.seed", System.currentTimeMillis());
-        healthRandom = new Random(healthSeed);
+        HealthProperties properties = context.getBean(HealthProperties.class);
+        minHealth = properties.getMinHealth();
+        maxHealth = properties.getMaxHealth();
+        healthRandom = context.getBean("healthRandom", Random.class);
     }
 
-    private void configureWeapons() {
-        bulletDamage = Math.max(1, Integer.getInteger("weapon.bullet.damage", bulletDamage));
-        bulletSpeed = Math.max(0.1f, parseFloatProperty("weapon.bullet.speed", bulletSpeed));
-        bulletReload = Math.max(0.1f, parseFloatProperty("weapon.bullet.reload", bulletReload));
+    private void configureAiSettings() {
+        AiProperties properties = context.getBean(AiProperties.class);
+        aiMoveInterval = properties.getMoveInterval();
+        aiShootProbability = properties.getShootProbability();
+        aiRandom = context.getBean("aiRandom", Random.class);
+    }
+
+    private void initializeApplicationContext() {
+        context = new AnnotationConfigApplicationContext();
+        context.register(GameConfiguration.class);
+        context.getBeanFactory().registerSingleton("spriteBatch", batch);
+        context.getBeanFactory().registerSingleton("ground", ground);
+        context.getBeanFactory().registerSingleton("tankTextureRegion", new TextureRegion(tankTexture));
+        context.getBeanFactory().registerSingleton("treeTextureRegion", new TextureRegion(treeTexture));
+        context.getBeanFactory().registerSingleton("bulletTextureRegion", bulletRegion);
+        context.getBeanFactory().registerSingleton("levelDimensions",
+                new LevelDimensions(ground.getWidth(), ground.getHeight()));
+        context.refresh();
     }
 
     private Tank createTank(Position position, Direction direction) {
@@ -283,23 +278,6 @@ public final class GameDesktopLauncher extends ApplicationAdapter {
         Texture texture = new Texture(pixmap);
         pixmap.dispose();
         return texture;
-    }
-
-    private static float parseFloatProperty(String key, float defaultValue) {
-        String value = System.getProperty(key);
-        if (value == null) return defaultValue;
-        try {
-            return Float.parseFloat(value);
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
-    }
-
-    private static float clamp01(float value) {
-        if (Float.isNaN(value)) {
-            return 0f;
-        }
-        return Math.max(0f, Math.min(1f, value));
     }
 
     public static void main(String[] args) {
